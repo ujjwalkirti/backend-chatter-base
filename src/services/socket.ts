@@ -1,5 +1,6 @@
 import { Server } from 'socket.io';
 import RedisService from './redis';
+import { verifyJwt } from '../utils/verifyJwt';
 
 class SocketService{
     private _io: Server;
@@ -17,6 +18,24 @@ class SocketService{
                 allowedHeaders: ['*']
             }
         });
+
+        this._io.use(async (socket, next) => {
+            const token = socket.handshake.auth?.token;
+
+            if (!token) {
+                return next(new Error('Access token missing'));
+            }
+
+            try {
+                const decoded = await verifyJwt(token);
+                socket.data.user = decoded;
+                next();
+            } catch (err: any) {
+                next(new Error(err.message));
+            }
+        });
+
+
 
         this.sub.subscribe("MESSAGES");
     }

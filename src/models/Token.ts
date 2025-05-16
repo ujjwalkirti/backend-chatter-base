@@ -1,23 +1,23 @@
 import mongoose from "mongoose";
 
-// User model, index should be on username
-const UserSchema = new mongoose.Schema({
+const TokenSchema = new mongoose.Schema({
     username: {
         type: String,
         required: true,
-        unique: true,
     },
-    dob: {
-        type: Date,
+    token: {
+        type: String,
         required: true,
+        unique: true
     },
-    gender: {
+    deviceFingerprint: {
         type: String,
         required: true,
     },
-    ip_address: {
-        type: String,
+    expired: {
+        type: Boolean,
         required: true,
+        default: false
     },
     createdAt: {
         type: Date,
@@ -29,7 +29,5 @@ const UserSchema = new mongoose.Schema({
     },
 });
 
-// check if model already exists, if not, create a new one
-const User = mongoose.models.User || mongoose.model("User", UserSchema);
-
-export default User;
+const Token =  mongoose.models.Token || mongoose.model("Token", TokenSchema);
+export default Token;

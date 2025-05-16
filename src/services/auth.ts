@@ -1,10 +1,11 @@
 import { MongooseError } from "mongoose";
-import User from "../models/User";
+import jwt from "jsonwebtoken";
+import Token from "../models/Token";
 
 class AuthService {
     constructor() { }
 
-    async register(userDetails: any) {
+    async register(userDetails: any, deviceDetails: any) {
         try {
             if (!userDetails || Object.keys(userDetails).length === 0) {
                 return {
@@ -13,22 +14,61 @@ class AuthService {
                 };
             }
 
-            // check if username already exists
-            const existingUser = await User.findOne({ username: userDetails.username });
-            if (existingUser) {
+            if (!deviceDetails || Object.keys(deviceDetails).length === 0) {
                 return {
                     success: false,
-                    message: "Username already exists",
-                    user: existingUser
+                    message: "Device details not provided",
                 };
             }
 
-            const newUser = await User.create(userDetails);
+            // generate device fingerprint
+            const deviceFingerprint = JSON.stringify(deviceDetails);
 
-            return {
-                success: true,
-                message: "User registered successfully",
-                user: newUser
+            // check for existing valid token
+            const existingToken = await Token.findOne({ username: userDetails.username, expired: false, deviceFingerprint });
+            if (existingToken) {
+                // check if token is expired
+                jwt.verify(existingToken.token, process.env.ACCESS_TOKEN_SECRET!, async (err: any, decoded: any) => {
+                    if (err) {
+                        // generate a new token
+                        const token = jwt.sign(userDetails, process.env.ACCESS_TOKEN_SECRET!, { expiresIn: "1d" });
+
+                        // update the token
+                        existingToken.token = token;
+
+                        await existingToken.save();
+
+                        return {
+                            success: true,
+                            message: "User registered successfully",
+                            data: {
+                                token,
+                                user: userDetails.username
+                            }
+                        }
+                    }
+                })
+                return {
+                    success: true,
+                    message: "User already registered",
+                    data: {
+                        token: existingToken.token,
+                        user: existingToken.username
+                    }
+                };
+            } else {
+                //  generate a token
+                const token = jwt.sign(userDetails, process.env.ACCESS_TOKEN_SECRET!, { expiresIn: "1d" });
+                const newToken = new Token({ username: userDetails.username, token, deviceFingerprint });
+                await newToken.save();
+                return {
+                    success: true,
+                    message: "User registered successfully",
+                    data: {
+                        token,
+                        user: userDetails.username
+                    }
+                }
             }
         } catch (error) {
             // if there is some mongodb generated error

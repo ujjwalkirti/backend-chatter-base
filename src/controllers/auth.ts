@@ -8,7 +8,7 @@ const authService = new AuthService();
 
 authRouter.post("/register", async (req: Request, res: Response) => {
     try {
-        const { username, dob, gender, ip_address } = req.body;
+        const { username, dob, gender, ip_address, deviceDetails } = req.body;
 
         const userDetails = {
             username,
@@ -17,7 +17,7 @@ authRouter.post("/register", async (req: Request, res: Response) => {
             ip_address,
         };
 
-        const response = await authService.register(userDetails);
+        const response = await authService.register(userDetails,deviceDetails);
         if (response.success) {
             res.status(200).send(response);
         } else {

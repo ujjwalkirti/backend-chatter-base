@@ -4,6 +4,7 @@ import SocketService from './services/socket';
 import express from 'express';
 import router from './controllers';
 import { connectToMongodb } from './config/mongoConfig';
+import cors from 'cors';
 
 const app = express();
 
@@ -17,11 +18,11 @@ async function init() {
     app.use(express.json());
 
     // configure cors
-    app.use(function (req, res, next) {
-        res.header("Access-Control-Allow-Origin", "*");
-        res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
-        next();
-    });
+    app.use(cors({
+        origin: '*',
+        methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+        allowedHeaders: ['Content-Type', 'Authorization'],
+    }));
 
     app.use('/api', router);
 
