@@ -1,16 +1,15 @@
 import { Server } from 'socket.io';
 import RedisService from './redis';
-import { verifyJwt } from '../utils/verifyJwt';
+import Chatroom from '../models/Chatroom';
 
-class SocketService{
+class SocketService {
     private _io: Server;
-
     private redisService = new RedisService();
 
     sub = this.redisService.sub;
     pub = this.redisService.pub;
 
-    constructor(){
+    constructor() {
         console.log('init socket server');
         this._io = new Server({
             cors: {
@@ -19,25 +18,8 @@ class SocketService{
             }
         });
 
-        this._io.use(async (socket, next) => {
-            const token = socket.handshake.auth?.token;
-
-            if (!token) {
-                return next(new Error('Access token missing'));
-            }
-
-            try {
-                const decoded = await verifyJwt(token);
-                socket.data.user = decoded;
-                next();
-            } catch (err: any) {
-                next(new Error(err.message));
-            }
-        });
-
-
-
         this.sub.subscribe("MESSAGES");
+        this.sub.subscribe("GROUPS")
     }
 
     public initListeners() {
@@ -46,22 +28,71 @@ class SocketService{
 
         io.on("connect", (socket) => {
             console.log(`New Socket Connected`, socket.id);
-            socket.on("message", async ({ message }: { message: string }) => {
-                // publish this message to redis
-                await this.pub.publish("MESSAGES", JSON.stringify({ message }));
+
+            // Client joins one or more rooms
+            socket.on("join-rooms", ({ userId, groupIds }: { userId: string, groupIds: string[] }) => {
+                console.log(`User ${userId} joining rooms: ${groupIds.join(', ')}`);
+                groupIds.forEach(groupId => {
+                    this.pub.publish("GROUPS", JSON.stringify({ userId, groupId }));
+                    socket.join(groupId); // Join group as room
+                });
+            });
+
+            // Handle message send
+            socket.on("message", async (payload: string) => {
+                try {
+                    const { message, senderId, receiverId } = JSON.parse(payload);
+                    if (!senderId || !receiverId || !message) return;
+
+                    await this.pub.publish("MESSAGES", JSON.stringify({
+                        senderId,
+                        receiverId, // could be groupId or userId
+                        message
+                    }));
+                } catch (err) {
+                    console.error("Invalid message format:", err);
+                }
+            });
+
+            socket.on("disconnect", () => {
+                console.log(`Socket disconnected: ${socket.id}`);
             });
         });
 
+        // Handle Redis-published messages
         this.sub.on("message", async (channel, message) => {
             if (channel === "MESSAGES") {
-                console.log("new message from redis", message);
-                io.emit("message", message);
+                try {
+                    const { senderId, receiverId, message: msg } = JSON.parse(message);
+
+                    // Just emit to the room
+                    this.io.to(receiverId).emit("message", {
+                        senderId,
+                        groupId: receiverId,
+                        message: msg
+                    });
+
+                    console.log(`Broadcasted message to room ${receiverId}`);
+                } catch (err) {
+                    console.error("Failed to parse message from Redis:", err);
+                }
+            } else if (channel === "GROUPS") {
+                try {
+                    const { userId, groupId } = JSON.parse(message);
+                    await Chatroom.updateOne({ _id: groupId }, { $inc: { participantCount: 1 } });
+                    // Just emit to the room
+                    this.io.to(groupId).emit("join-rooms", { userId, groupIds: [groupId] });
+                    console.log(`Broadcasted message to room ${groupId}`);
+                } catch (err) {
+                    console.error("Failed to parse message from Redis:", err);
+                }
             }
         });
+
+
     }
 
-
-    get io(){
+    get io() {
         return this._io;
     }
 }
