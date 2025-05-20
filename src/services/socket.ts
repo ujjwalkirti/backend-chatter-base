@@ -19,7 +19,7 @@ class SocketService {
         });
 
         this.sub.subscribe("MESSAGES");
-        this.sub.subscribe("GROUPS")
+        this.sub.subscribe("JOIN-GROUPS");
     }
 
     public initListeners() {
@@ -33,7 +33,7 @@ class SocketService {
             socket.on("join-rooms", ({ userId, groupIds }: { userId: string, groupIds: string[] }) => {
                 console.log(`User ${userId} joining rooms: ${groupIds.join(', ')}`);
                 groupIds.forEach(groupId => {
-                    this.pub.publish("GROUPS", JSON.stringify({ userId, groupId }));
+                    this.pub.publish("JOIN-GROUPS", JSON.stringify({ userId, groupId }));
                     socket.join(groupId); // Join group as room
                 });
             });
@@ -76,7 +76,7 @@ class SocketService {
                 } catch (err) {
                     console.error("Failed to parse message from Redis:", err);
                 }
-            } else if (channel === "GROUPS") {
+            } else if (channel === "JOIN-GROUPS") {
                 try {
                     const { userId, groupId } = JSON.parse(message);
                     await Chatroom.updateOne({ _id: groupId }, { $inc: { participantCount: 1 } });

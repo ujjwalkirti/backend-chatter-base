@@ -13,7 +13,7 @@ const ChatroomSchema = new mongoose.Schema({
     },
     lastMessageContent: {
         type: String,
-        required: true,
+        required: false,
     },
     participantCount: {
         type: Number,
