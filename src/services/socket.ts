@@ -20,6 +20,7 @@ class SocketService {
 
         this.sub.subscribe("MESSAGES");
         this.sub.subscribe("JOIN-GROUPS");
+        this.sub.subscribe("LEAVE-GROUPS");
     }
 
     public initListeners() {
@@ -54,6 +55,15 @@ class SocketService {
                 }
             });
 
+            // Handle leaving groups
+            socket.on("leave-rooms", ({ userId, groupIds }: { userId: string, groupIds: string[] }) =>{
+                console.log(`User ${userId} leaving rooms: ${groupIds.join(', ')}`);
+                groupIds.forEach(groupId => {
+                    this.pub.publish("LEAVE-GROUPS", JSON.stringify({ userId, groupId }));
+                    socket.leave(groupId); // Leave group as room
+                });
+            })
+
             socket.on("disconnect", () => {
                 console.log(`Socket disconnected: ${socket.id}`);
             });
@@ -79,10 +89,39 @@ class SocketService {
             } else if (channel === "JOIN-GROUPS") {
                 try {
                     const { userId, groupId } = JSON.parse(message);
-                    await Chatroom.updateOne({ _id: groupId }, { $inc: { participantCount: 1 } });
-                    // Just emit to the room
+                    const chatroom = await Chatroom.findById(groupId);
+                    if (!chatroom.participants.includes(userId)) {
+                        await Chatroom.updateOne(
+                            { _id: groupId },
+                            {
+                                $inc: { participantCount: 1 },
+                                $push: { participants: userId }
+                            }
+                        );
+                    }
+                    // Emit join-rooms event as before
                     this.io.to(groupId).emit("join-rooms", { userId, groupIds: [groupId] });
                     console.log(`Broadcasted message to room ${groupId}`);
+                } catch (err) {
+                    console.error("Failed to parse message from Redis:", err);
+                }
+            } else if (channel === "LEAVE-GROUPS") {
+                try {
+                    const { userId, groupId } = JSON.parse(message);
+                    console.log(`${userId} is leaving the grroup: ${groupId}`)
+                    const chatroom = await Chatroom.findById(groupId);
+                    if (chatroom.participants.includes(userId)) {
+                        await Chatroom.updateOne(
+                            { _id: groupId },
+                            {
+                                $inc: { participantCount: -1 },
+                                $pull: { participants: userId }
+                            }
+                        );
+                    }
+                    // Optionally emit an event to the room
+                    this.io.to(groupId).emit("leave-rooms", { userId, groupIds: [groupId] });
+                    console.log(`User ${userId} left room ${groupId}`);
                 } catch (err) {
                     console.error("Failed to parse message from Redis:", err);
                 }

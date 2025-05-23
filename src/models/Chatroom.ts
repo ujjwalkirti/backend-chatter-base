@@ -19,6 +19,10 @@ const ChatroomSchema = new mongoose.Schema({
         type: Number,
         required: true,
     },
+    participants: {
+        type: [String],
+        default: [],
+    },
     createdAt: {
         type: Date,
         default: Date.now,
