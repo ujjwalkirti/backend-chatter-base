@@ -31,6 +31,10 @@ const ChatroomSchema = new mongoose.Schema({
         type: Date,
         default: Date.now,
     },
+    isPermanent:{
+        type: Boolean,
+        default: false
+    }
 });
 
 const Chatroom = mongoose.models.Chatroom || mongoose.model("Chatroom", ChatroomSchema);
