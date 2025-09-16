@@ -126,6 +126,95 @@ class AuthService {
       }
     }
   }
+
+  async verifyToken(token: string) {
+    try {
+      // check if the token exists in the database and is not expired
+      const existingToken = await Token.findOne({ token, expired: false });
+      if (!existingToken) {
+        return {
+          success: false,
+          message: "Invalid token",
+        };
+      }
+
+      // verify the token
+      const decoded = jwt.verify(
+        token,
+        process.env.ACCESS_TOKEN_SECRET as string
+      ) as jwt.JwtPayload;
+
+      return {
+        success: true,
+        message: "Token is valid",
+        data: decoded,
+      };
+    } catch (error) {
+      if (error instanceof jwt.TokenExpiredError) {
+        // delete the user from db
+        await User.deleteOne({ username: (jwt.decode(token) as any).username });
+
+        // mark token as expired
+        await Token.updateOne({ token, expired: false }, { expired: true });
+
+        return {
+          success: false,
+          message: "Token has expired",
+        };
+      } else if (error instanceof jwt.JsonWebTokenError) {
+        return {
+          success: false,
+          message: "Invalid token",
+        };
+      } else {
+        console.log(error);
+        return {
+          success: false,
+          message: "Internal Server Error",
+          error: error,
+        };
+      }
+    }
+  }
+
+  async logout(token: string) {
+    try {
+      // check if the token exists in the database and is not expired
+      const existingToken = await Token.findOne({ token, expired: false });
+      if (!existingToken) {
+        return {
+          success: false,
+          message: "Invalid token",
+        };
+      }
+
+      // mark the token as expired
+      existingToken.expired = true;
+
+      // delete the user as well
+      await User.deleteOne({ username: existingToken.username });
+      await existingToken.save();
+
+      return {
+        success: true,
+        message: "User logged out successfully",
+      };
+    } catch (error) {
+      if (error instanceof MongooseError) {
+        return {
+          success: false,
+          message: error.message,
+        };
+      } else {
+        console.log(error);
+        return {
+          success: false,
+          message: "Internal Server Error",
+          error: error,
+        };
+      }
+    }
+  }
 }
 
 export default AuthService;
